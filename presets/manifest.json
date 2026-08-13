@@ -1,0 +1,10 @@
+{
+  "default": "ipq807x_nand",
+  "presets": [
+    {
+      "id": "ipq807x_nand",
+      "name": "IPQ807x NAND (nand-partition.xml)",
+      "file": "ipq807x-nand-partition.xml"
+    }
+  ]
+}
