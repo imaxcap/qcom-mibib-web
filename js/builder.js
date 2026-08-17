@@ -24,7 +24,7 @@ function crc32Mpeg2(uint8Array, initialCrc = 0) {
 /**
  * Build Official Qualcomm Binary MIBIB (partition.mbn / mibib.bin)
  */
-function buildSystemMbn(partitions, calculatorOptions = {}) {
+function buildSystemMbnBytes(partitions, calculatorOptions = {}) {
   const flashType = calculatorOptions.flashType || 'nand';
 
   // NOR & NORPLUSNAND: Flash 0 is NOR, page size 256 bytes (0x100), block size 64KB, 1 MIBIB copy (-c 1) -> 64KB total
@@ -159,7 +159,12 @@ function buildSystemMbn(partitions, calculatorOptions = {}) {
     currBlockPos += crcPageData.length;
   }
 
-  return new Blob([totalBinaryBytes.buffer], { type: 'application/octet-stream' });
+  return totalBinaryBytes;
+}
+
+function buildSystemMbn(partitions, calculatorOptions = {}) {
+  const bytes = buildSystemMbnBytes(partitions, calculatorOptions);
+  return new Blob([bytes.buffer], { type: 'application/octet-stream' });
 }
 
 function buildPartitionXml(partitions, calculatorOptions = {}) {
@@ -218,4 +223,8 @@ function escapeXml(unsafe) {
       case '"': return '&quot;';
     }
   });
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { buildSystemMbn, buildSystemMbnBytes, buildPartitionXml, crc32Mpeg2 };
 }

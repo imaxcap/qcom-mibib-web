@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title data-i18n="appTitle">Qualcomm MIBIB Web Studio (qcom-mibib-web)</title>
+  <title data-i18n="appTitle">Qualcomm MIBIB & Firmware Studio (qcom-mibib-web)</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div class="container">
     <header>
       <div class="brand">
-        <span class="logo-badge">MIBIB</span>
+        <span class="logo-badge">QPIC / MIBIB</span>
         <div>
-          <h1 data-i18n="appTitle">Qualcomm MIBIB Web Studio</h1>
-          <div class="subtitle" data-i18n="appSubtitle">Visual Partition Studio for Qualcomm IPQ SOCs (IPQ6018 / IPQ807x / IPQ5018 / IPQ5332)</div>
+          <h1 data-i18n="appTitle">Qualcomm MIBIB & Firmware Studio</h1>
+          <div class="subtitle" data-i18n="appSubtitle">Visual Partition & Firmware Studio for Qualcomm IPQ SOCs (IPQ9574 / IPQ807x / IPQ6018 / IPQ5018 / IPQ5332 / IPQ4019)</div>
         </div>
       </div>
       <div class="header-controls">
@@ -29,6 +29,7 @@
         </select>
 
         <a href="https://github.com/imaxcap/qcom-mibib-web" target="_blank" class="repo-link">GitHub: imaxcap/qcom-mibib-web 🔒</a>
+      </div>
     </header>
 
     <!-- Disclaimer Alert Banner -->
@@ -37,92 +38,165 @@
       <span data-i18n="disclaimerText">This tool has not been fully tested across all physical hardware devices. Please test and verify carefully before flashing onto real devices. Use at your own risk.</span>
     </div>
 
-    <!-- Configuration & Hardware Profile Panel (Default 2K Page) -->
-    <div class="panel">
-      <div class="panel-header">
-        <span data-i18n="hardwareHeader">Hardware & Flash Geometry Profile</span>
-        <span class="subtitle" data-i18n="hardwareSub">Set independent hardware sector parameters for live calculation</span>
+    <!-- Navigation Tabs -->
+    <div class="tabs-nav">
+      <button class="tab-btn active" id="tab-btn-firmware" data-tab="tab-firmware" data-i18n="tabFirmwareStudio">🛠️ Firmware & Programmer Studio</button>
+      <button class="tab-btn" id="tab-btn-mibib" data-tab="tab-mibib" data-i18n="tabMibibStudio">📐 MIBIB Partition Studio</button>
+    </div>
+
+    <!-- TAB 1: FIRMWARE STUDIO -->
+    <div class="tab-pane active" id="tab-firmware">
+      <!-- Drag and Drop Firmware Zone -->
+      <div class="dropzone" id="fw-dropzone">
+        <div class="dropzone-icon">📦</div>
+        <div class="dropzone-text" data-i18n="fwDropzoneTitle">Click or Drag & Drop <strong>Programmer Raw Dump / Flat Firmware (Max 136MB)</strong> here</div>
+        <div class="dropzone-hint" data-i18n="fwDropzoneHint">Supports auto-detecting Qualcomm QPIC 2K/4K BCH4/BCH8 layouts, automatic OOB stripping, partition inspection, single partition replace & dual-mode export</div>
+        <input type="file" id="fw-file-input" style="display: none;" accept=".bin,.raw,.img,.dump">
       </div>
-      <div class="grid-3">
-        <div class="form-group">
-          <label for="select-pagesize" data-i18n="labelPageSize">Flash Page & Block Size (Default 2K)</label>
-          <select id="select-pagesize">
-            <option value="2048" selected data-i18n="option2k">2K Page (128 KiB Block Size)</option>
-            <option value="4096" data-i18n="option4k">4K Page (256 KiB Block Size)</option>
-          </select>
+
+      <!-- Active Firmware Workspace -->
+      <div id="fw-workspace" style="display: none;">
+        <!-- Firmware Metadata Banner -->
+        <div class="panel" id="fw-info-card" style="margin-bottom: 16px; padding: 16px;"></div>
+
+        <!-- Visual Flash Map -->
+        <div class="panel">
+          <div class="panel-header">
+            <span data-i18n="fwVisualHeader">Physical Firmware Flash Layout</span>
+            <span class="subtitle" data-i18n="fwVisualSub">Visual memory map of partitions inside the active firmware image</span>
+          </div>
+          <div class="flash-map-container">
+            <div class="flash-bar" id="fw-flash-bar"></div>
+          </div>
         </div>
 
-        <div class="form-group">
-          <label for="select-flashtype" data-i18n="labelFlashType">Flash Device Type</label>
-          <select id="select-flashtype">
-            <option value="nand" selected data-i18n="optionNand">QSPI NAND Flash (Single Flash)</option>
-            <option value="nor" data-i18n="optionNor">SPI NOR Flash (Single Flash)</option>
-            <option value="norplusnand" data-i18n="optionDual">NOR + NAND Dual Flash (NORPLUSNAND)</option>
-          </select>
+        <!-- Firmware Actions Bar -->
+        <div class="actions-bar">
+          <div class="btn-group">
+            <button class="btn btn-orange" id="btn-fw-reload-mibib" data-i18n="btnReloadMibib">🔄 Reload MIBIB Table</button>
+            <button class="btn" id="btn-fw-convert-mibib" data-i18n="btnConvertMibib">⚙️ Auto-Convert MIBIB (2K ➔ 4K / Block Size)</button>
+          </div>
+
+          <div class="btn-group">
+            <button class="btn btn-primary" id="btn-fw-export-flat" data-i18n="btnExportFlatFw">💾 Export Flat Firmware (.bin)</button>
+            <button class="btn btn-blue" id="btn-fw-export-qpic" data-i18n="btnExportQpicFw">⚡ Export Qualcomm QPIC Raw Dump (.raw)</button>
+          </div>
         </div>
 
-        <div class="form-group">
-          <label for="select-preset" data-i18n="labelPreset">Preset Layouts</label>
-          <select id="select-preset" onchange="loadPresetLayout()">
-            <option value="custom" data-i18n="optionCustom">Custom Layout</option>
-          </select>
+        <!-- Partition Table with Replace / Export Actions -->
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th data-i18n="thFwSelect" style="width: 48px; text-align: center;">Export</th>
+                <th data-i18n="thFwPartNum">#</th>
+                <th data-i18n="thFwPartName" class="col-name">Partition Name</th>
+                <th data-i18n="thFwStartBlock" class="col-block">Start Block</th>
+                <th data-i18n="thFwBlocks" class="col-block">Blocks</th>
+                <th data-i18n="thFwHexStart" class="col-hex">Hex Start</th>
+                <th data-i18n="thFwHexEnd" class="col-hex">Hex End</th>
+                <th data-i18n="thFwSize" class="col-size">Size</th>
+                <th data-i18n="thFwStatus">Status</th>
+                <th data-i18n="thFwActions">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="fw-partition-tbody">
+              <!-- Rendered dynamically by firmware-studio.js -->
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
 
-    <!-- Drag and Drop Import Zone -->
-    <div class="dropzone" id="dropzone">
-      <div class="dropzone-icon">📁</div>
-      <div class="dropzone-text" data-i18n="dropzoneText">Click or Drag & Drop <strong>partition.mbn / mibib.bin / full dump (&lt; 16MB)</strong> or <strong>nand-partition.xml</strong> here</div>
-      <div class="dropzone-hint" data-i18n="dropzoneHint">Supports parsing System Partition MBN binaries (0x55EE73AA), full NOR/NAND flash dumps under 16MB, and official Qualcomm XML configs</div>
-      <input type="file" id="file-input" style="display: none;" accept=".bin,.mbn,.xml">
-    </div>
+    <!-- TAB 2: MIBIB PARTITION STUDIO (Standalone MIBIB Designer) -->
+    <div class="tab-pane" id="tab-mibib">
+      <!-- Configuration & Hardware Profile Panel (Default 2K Page) -->
+      <div class="panel">
+        <div class="panel-header">
+          <span data-i18n="hardwareHeader">Hardware & Flash Geometry Profile</span>
+          <span class="subtitle" data-i18n="hardwareSub">Set independent hardware sector parameters for live calculation</span>
+        </div>
+        <div class="grid-3">
+          <div class="form-group">
+            <label for="select-pagesize" data-i18n="labelPageSize">Flash Page & Block Size (Default 2K)</label>
+            <select id="select-pagesize">
+              <option value="2048" selected data-i18n="option2k">2K Page (128 KiB Block Size)</option>
+              <option value="4096" data-i18n="option4k">4K Page (256 KiB Block Size)</option>
+            </select>
+          </div>
 
-    <!-- Visual Flash Map -->
-    <div class="panel">
-      <div class="panel-header">
-        <span data-i18n="visualHeader">Visual Flash Sector Distribution</span>
-        <span class="subtitle" data-i18n="visualSub">Live map of physical offsets, gaps, and collisions</span>
-      </div>
-      <div class="flash-map-container" id="flash-map-container">
-        <div class="flash-bar" id="flash-bar"></div>
-      </div>
-    </div>
+          <div class="form-group">
+            <label for="select-flashtype" data-i18n="labelFlashType">Flash Device Type</label>
+            <select id="select-flashtype">
+              <option value="nand" selected data-i18n="optionNand">QSPI NAND Flash (Single Flash)</option>
+              <option value="nor" data-i18n="optionNor">SPI NOR Flash (Single Flash)</option>
+              <option value="norplusnand" data-i18n="optionDual">NOR + NAND Dual Flash (NORPLUSNAND)</option>
+            </select>
+          </div>
 
-    <!-- Actions & Tools Bar -->
-    <div class="actions-bar">
-      <div class="btn-group">
-        <button class="btn btn-blue" id="btn-add-part" data-i18n="btnAddPart">+ Add Partition</button>
-        <button class="btn" id="btn-auto-align" data-i18n="btnAutoAlign">⚙️ Auto-Align & Cascade Offsets</button>
+          <div class="form-group">
+            <label for="select-preset" data-i18n="labelPreset">Preset Layouts</label>
+            <select id="select-preset" onchange="loadPresetLayout()">
+              <option value="custom" data-i18n="optionCustom">Custom Layout</option>
+            </select>
+          </div>
+        </div>
       </div>
 
-      <div class="btn-group">
-        <button class="btn btn-primary" id="btn-export-mbn" data-i18n="btnExportMbn">💾 Export Binary (.mbn / .bin)</button>
-        <button class="btn" id="btn-export-xml" data-i18n="btnExportXml">📄 Export Config (.xml)</button>
+      <!-- Drag and Drop Import Zone -->
+      <div class="dropzone" id="dropzone">
+        <div class="dropzone-icon">📁</div>
+        <div class="dropzone-text" data-i18n="dropzoneText">Click or Drag & Drop <strong>partition.mbn / mibib.bin / full dump (&lt; 16MB)</strong> or <strong>nand-partition.xml</strong> here</div>
+        <div class="dropzone-hint" data-i18n="dropzoneHint">Supports parsing System Partition MBN binaries (0x55EE73AA), full NOR/NAND flash dumps under 16MB, and official Qualcomm XML configs</div>
+        <input type="file" id="file-input" style="display: none;" accept=".bin,.mbn,.xml">
       </div>
-    </div>
 
-    <!-- Interactive Partition Table -->
-    <div class="table-wrapper">
-      <table>
-        <thead>
-          <tr>
-            <th data-i18n="thNum">#</th>
-            <th data-i18n="thName" class="col-name">Partition Name</th>
-            <th data-i18n="thHexStart" class="col-hex">Hex Start</th>
-            <th data-i18n="thHexEnd" class="col-hex">Hex End</th>
-            <th data-i18n="thSizeMb" class="col-mb">Size (MB)</th>
-            <th data-i18n="thSizeKb" class="col-kb">Size (KB)</th>
-            <th data-i18n="thBlocks">Blocks</th>
-            <th data-i18n="thFlashRegion">Flash Region</th>
-            <th data-i18n="thStatus">Status & Collision Check</th>
-            <th data-i18n="thActions">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="partition-tbody">
-          <!-- Rendered dynamically by app.js -->
-        </tbody>
-      </table>
+      <!-- Visual Flash Map -->
+      <div class="panel">
+        <div class="panel-header">
+          <span data-i18n="visualHeader">Visual Flash Sector Distribution</span>
+          <span class="subtitle" data-i18n="visualSub">Live map of physical offsets, gaps, and collisions</span>
+        </div>
+        <div class="flash-map-container" id="flash-map-container">
+          <div class="flash-bar" id="flash-bar"></div>
+        </div>
+      </div>
+
+      <!-- Actions & Tools Bar -->
+      <div class="actions-bar">
+        <div class="btn-group">
+          <button class="btn btn-blue" id="btn-add-part" data-i18n="btnAddPart">+ Add Partition</button>
+          <button class="btn" id="btn-auto-align" data-i18n="btnAutoAlign">⚙️ Auto-Align & Cascade Offsets</button>
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" id="btn-export-mbn" data-i18n="btnExportMbn">💾 Export Binary (.mbn / .bin)</button>
+          <button class="btn" id="btn-export-xml" data-i18n="btnExportXml">📄 Export Config (.xml)</button>
+        </div>
+      </div>
+
+      <!-- Interactive Partition Table -->
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th data-i18n="thNum">#</th>
+              <th data-i18n="thName" class="col-name">Partition Name</th>
+              <th data-i18n="thHexStart" class="col-hex">Hex Start</th>
+              <th data-i18n="thHexEnd" class="col-hex">Hex End</th>
+              <th data-i18n="thSizeMb" class="col-mb">Size (MB)</th>
+              <th data-i18n="thSizeKb" class="col-kb">Size (KB)</th>
+              <th data-i18n="thBlocks">Blocks</th>
+              <th data-i18n="thFlashRegion">Flash Region</th>
+              <th data-i18n="thStatus">Status & Collision Check</th>
+              <th data-i18n="thActions">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="partition-tbody">
+            <!-- Rendered dynamically by app.js -->
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -151,6 +225,8 @@
   <script src="js/parser-bin.js"></script>
   <script src="js/parser-xml.js"></script>
   <script src="js/builder.js"></script>
+  <script src="js/qpic-codec.js"></script>
+  <script src="js/firmware-studio.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

@@ -1,6 +1,8 @@
 /**
  * Qualcomm MIBIB Partition Binary Parser & Full-Flash Auto-Discovery Engine
+ * Supports both ArrayBuffer and Uint8Array/TypedArray inputs
  * Includes Physical MIBIB Header Distance Measurement for Auto Page/Block Size Detection (2K vs 4K)
+ * 100% Ported from Qualcomm Official partition_tool.py Specification & nandprog C++ core
  */
 const MIBIB_HEADER_MAGIC1 = 0xFE569FAC;
 const MIBIB_HEADER_MAGIC2 = 0xCD7F127A;
@@ -9,23 +11,39 @@ const SYS_TABLE_MAGIC2    = 0xE35EBDDB;
 const USR_TABLE_MAGIC1    = 0xAA7D1B9A;
 const USR_TABLE_MAGIC2    = 0x1F7D48BC;
 
-const MAX_SUPPORTED_FILE_SIZE = 16 * 1024 * 1024; // 16 MB Safety Limit
-const BLOCK_SIZE_ALIGN_64K    = 64 * 1024;         // 64 KB (65536 bytes) Block Alignment
+const MAX_SUPPORTED_FILE_SIZE = 136 * 1024 * 1024; // 136 MB Full-Dump Limit
+const BLOCK_SIZE_ALIGN_64K    = 64 * 1024;        // 64 KB (65536 bytes) Block Alignment
 
-function parseMibibBin(buffer) {
-  const dataLen = buffer.byteLength;
+function parseMibibBin(inputBuffer) {
+  let arrayBuffer;
+  let byteOffset = 0;
+  let dataLen = 0;
 
-  // 1. 16MB File Size Safety Check
+  if (inputBuffer instanceof ArrayBuffer) {
+    arrayBuffer = inputBuffer;
+    byteOffset = 0;
+    dataLen = inputBuffer.byteLength;
+  } else if (ArrayBuffer.isView(inputBuffer)) {
+    arrayBuffer = inputBuffer.buffer;
+    byteOffset = inputBuffer.byteOffset;
+    dataLen = inputBuffer.byteLength;
+  } else {
+    throw new Error("Input must be an ArrayBuffer or Uint8Array");
+  }
+
   if (dataLen > MAX_SUPPORTED_FILE_SIZE) {
-    throw new Error(`File size (${(dataLen / (1024 * 1024)).toFixed(2)} MB) exceeds 16 MB limit. Please provide a full dump under 16 MB or standalone MIBIB binary.`);
+    throw new Error(`File size (${(dataLen / (1024 * 1024)).toFixed(2)} MB) exceeds 136 MB limit. Please provide a dump under 136 MB or standalone MIBIB binary.`);
   }
 
   if (dataLen < 32) {
     throw new Error("File size is too small to contain a valid MIBIB header.");
   }
 
-  const dataView = new DataView(buffer);
-  const uint8Data = new Uint8Array(buffer);
+  // Scan window: MIBIB is always located in the boot sector (first 8MB)
+  const scanLimit = Math.min(dataLen, 8 * 1024 * 1024);
+
+  const dataView = new DataView(arrayBuffer, byteOffset, dataLen);
+  const uint8Data = new Uint8Array(arrayBuffer, byteOffset, dataLen);
 
   let mibibOffset = -1;
   let tableOffset = -1;
@@ -33,11 +51,14 @@ function parseMibibBin(buffer) {
   let numParts = 0;
   const mibibCopyOffsets = [];
 
-  // 2. Scan for ALL MIBIB Header Copies (0xFE569FAC / 0xCD7F127A) to infer physical Block Size
-  for (let offset = 0; offset <= dataLen - 32; offset += 4) {
+  // 1. Scan for ALL MIBIB Header Copies (0xFE569FAC / 0xCD7F127A) to infer physical Block Size
+  for (let offset = 0; offset <= scanLimit - 16; offset += 4) {
     if (dataView.getUint32(offset, true) === MIBIB_HEADER_MAGIC1 &&
         dataView.getUint32(offset + 4, true) === MIBIB_HEADER_MAGIC2) {
       mibibCopyOffsets.push(offset);
+      if (mibibOffset < 0) {
+        mibibOffset = offset;
+      }
     }
   }
 
@@ -59,25 +80,28 @@ function parseMibibBin(buffer) {
     }
   }
 
-  // 3. Priority 1: 64KB Block-Aligned Sector Scan for MIBIB Header
-  for (let offset = 0; offset <= dataLen - 32; offset += BLOCK_SIZE_ALIGN_64K) {
-    if (dataView.getUint32(offset, true) === MIBIB_HEADER_MAGIC1 &&
-        dataView.getUint32(offset + 4, true) === MIBIB_HEADER_MAGIC2) {
-      mibibOffset = offset;
-      
-      const testTableOffset = mibibOffset + 16;
-      if (testTableOffset + 16 <= dataLen) {
-        const m1 = dataView.getUint32(testTableOffset, true);
-        const m2 = dataView.getUint32(testTableOffset + 4, true);
-        const parts = dataView.getUint32(testTableOffset + 12, true);
+  // 2. If MIBIB header was found, check standard relative positions for Table Header
+  if (mibibOffset >= 0) {
+    const candidateOffsets = [
+      mibibOffset + 16,     // Contiguous table (compact standalone)
+      mibibOffset + 256,    // SPI NOR page 1
+      mibibOffset + 2048,   // 2K NAND page 1
+      mibibOffset + 4096,   // 4K NAND page 1
+    ];
+
+    for (const testOffset of candidateOffsets) {
+      if (testOffset + 16 <= dataLen) {
+        const m1 = dataView.getUint32(testOffset, true);
+        const m2 = dataView.getUint32(testOffset + 4, true);
+        const parts = dataView.getUint32(testOffset + 12, true);
 
         if (m1 === SYS_TABLE_MAGIC1 && m2 === SYS_TABLE_MAGIC2 && parts > 0 && parts <= 128) {
-          tableOffset = testTableOffset;
+          tableOffset = testOffset;
           isSysTable = true;
           numParts = parts;
           break;
         } else if (m1 === USR_TABLE_MAGIC1 && m2 === USR_TABLE_MAGIC2 && parts > 0 && parts <= 128) {
-          tableOffset = testTableOffset;
+          tableOffset = testOffset;
           isSysTable = false;
           numParts = parts;
           break;
@@ -86,58 +110,9 @@ function parseMibibBin(buffer) {
     }
   }
 
-  // 4. Priority 2: Unaligned MIBIB Header Scan
-  if (mibibOffset < 0 || tableOffset < 0) {
-    for (let offset = 0; offset <= dataLen - 32; offset += 4) {
-      if (dataView.getUint32(offset, true) === MIBIB_HEADER_MAGIC1 &&
-          dataView.getUint32(offset + 4, true) === MIBIB_HEADER_MAGIC2) {
-        mibibOffset = offset;
-        const testTableOffset = mibibOffset + 16;
-        if (testTableOffset + 16 <= dataLen) {
-          const m1 = dataView.getUint32(testTableOffset, true);
-          const m2 = dataView.getUint32(testTableOffset + 4, true);
-          const parts = dataView.getUint32(testTableOffset + 12, true);
-
-          if (m1 === SYS_TABLE_MAGIC1 && m2 === SYS_TABLE_MAGIC2 && parts > 0 && parts <= 128) {
-            tableOffset = testTableOffset;
-            isSysTable = true;
-            numParts = parts;
-            break;
-          } else if (m1 === USR_TABLE_MAGIC1 && m2 === USR_TABLE_MAGIC2 && parts > 0 && parts <= 128) {
-            tableOffset = testTableOffset;
-            isSysTable = false;
-            numParts = parts;
-            break;
-          }
-        }
-      }
-    }
-  }
-
-  // 5. Priority 3: Standalone Partition Table Header Scan (No MIBIB Header)
+  // 3. Fallback: 4-byte sliding scan across the entire scan window for Table Header
   if (tableOffset < 0) {
-    for (let offset = 0; offset <= dataLen - 16; offset += BLOCK_SIZE_ALIGN_64K) {
-      const m1 = dataView.getUint32(offset, true);
-      const m2 = dataView.getUint32(offset + 4, true);
-      const parts = dataView.getUint32(offset + 12, true);
-
-      if (m1 === SYS_TABLE_MAGIC1 && m2 === SYS_TABLE_MAGIC2 && parts > 0 && parts <= 128) {
-        tableOffset = offset;
-        isSysTable = true;
-        numParts = parts;
-        break;
-      } else if (m1 === USR_TABLE_MAGIC1 && m2 === USR_TABLE_MAGIC2 && parts > 0 && parts <= 128) {
-        tableOffset = offset;
-        isSysTable = false;
-        numParts = parts;
-        break;
-      }
-    }
-  }
-
-  // 6. Priority 4: Fallback 4-byte fine scan for standalone table header
-  if (tableOffset < 0) {
-    for (let offset = 0; offset <= dataLen - 16; offset += 4) {
+    for (let offset = 0; offset <= scanLimit - 16; offset += 4) {
       const m1 = dataView.getUint32(offset, true);
       const m2 = dataView.getUint32(offset + 4, true);
       const parts = dataView.getUint32(offset + 12, true);
@@ -238,4 +213,8 @@ function parseMibibBin(buffer) {
     detectedPageSize: detectedPageSize,
     entries: entries
   };
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { parseMibibBin };
 }

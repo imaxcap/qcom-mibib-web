@@ -117,6 +117,22 @@ function bindUIEvents() {
     });
   }
 
+  // Tab Navigation
+  const tabButtons = document.querySelectorAll('.tab-btn');
+  tabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetTabId = btn.getAttribute('data-tab');
+      tabButtons.forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+
+      btn.classList.add('active');
+      const targetPane = document.getElementById(targetTabId);
+      if (targetPane) {
+        targetPane.classList.add('active');
+      }
+    });
+  });
+
   // Action Buttons
   document.getElementById('btn-add-part').addEventListener('click', addNewPartitionEnd);
   document.getElementById('btn-auto-align').addEventListener('click', autoAlignPartitions);
