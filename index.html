@@ -42,6 +42,7 @@
     <div class="tabs-nav">
       <button class="tab-btn active" id="tab-btn-firmware" data-tab="tab-firmware" data-i18n="tabFirmwareStudio">🛠️ Firmware & Programmer Studio</button>
       <button class="tab-btn" id="tab-btn-mibib" data-tab="tab-mibib" data-i18n="tabMibibStudio">📐 MIBIB Partition Studio</button>
+      <button class="tab-btn" id="tab-btn-programmer" data-tab="tab-programmer" data-i18n="tabProgrammerStudio">⚡ Hardware Programmer</button>
     </div>
 
     <!-- TAB 1: FIRMWARE STUDIO -->
@@ -80,6 +81,7 @@
           <div class="btn-group">
             <button class="btn btn-primary" id="btn-fw-export-flat" data-i18n="btnExportFlatFw">💾 Export Flat Firmware (.bin)</button>
             <button class="btn btn-blue" id="btn-fw-export-qpic" data-i18n="btnExportQpicFw">⚡ Export Qualcomm QPIC Raw Dump (.raw)</button>
+            <button class="btn btn-green" id="btn-fw-flash-hardware" data-i18n="btnFlashHardware">⚡ Flash to Device</button>
           </div>
         </div>
 
@@ -198,6 +200,253 @@
         </table>
       </div>
     </div>
+
+    <!-- TAB 3: HARDWARE PROGRAMMER STUDIO -->
+    <div class="tab-pane" id="tab-programmer">
+      <!-- Device Banner / Connection Panel -->
+      <div class="panel" style="margin-bottom: 16px;">
+        <div class="panel-header">
+          <div>
+            <span data-i18n="progHeader">STM32 NAND Programmer Studio</span>
+            <div class="subtitle" data-i18n="progSub">Direct Web Serial communication for STM32 NAND Programmer (v3.5.0 & v3.6.0+)</div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-primary" id="btn-prog-connect" data-i18n="progBtnConnect">🔌 Connect Device (Web Serial)</button>
+            <button class="btn btn-danger" id="btn-prog-disconnect" style="display: none;" data-i18n="progBtnDisconnect">🔌 Disconnect</button>
+            <button class="btn" id="btn-prog-reprobe" data-i18n="progBtnReprobe">🔄 Re-Probe Flash / ONFI</button>
+          </div>
+        </div>
+
+        <!-- Offline Banner -->
+        <div id="prog-banner-offline" style="padding: 12px 0; color: var(--text-secondary); font-size: 0.9rem;">
+          <span data-i18n="progOfflineHint">Connect STM32 NAND Programmer via USB to read, write, erase, and test physical NAND flash chips in real-time.</span>
+        </div>
+
+        <!-- Online Connected Card -->
+        <div id="prog-banner-online" style="display: none;">
+          <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
+            <label for="select-forced-chip" style="font-size: 0.85rem; color: var(--text-secondary);">NAND Chip Profile Override:</label>
+            <select id="select-forced-chip" style="padding: 4px 8px; font-size: 0.85rem; min-width: 260px;"></select>
+          </div>
+          <div class="panel" id="prog-chip-info-card" style="background-color: var(--bg-primary); padding: 14px; margin-bottom: 0;"></div>
+        </div>
+      </div>
+
+      <!-- Live Operation Progress Bar Card -->
+      <div class="panel" id="prog-progress-card" style="display: none; margin-bottom: 16px; border-left: 4px solid var(--accent-blue);">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.9rem;">
+          <span id="prog-progress-status" style="font-weight: bold; color: var(--accent-blue);">Executing...</span>
+          <span id="prog-progress-percent" style="font-weight: bold;">0%</span>
+        </div>
+        <div style="width: 100%; height: 12px; background-color: var(--bg-primary); border-radius: 6px; overflow: hidden; border: 1px solid var(--border-color); margin-bottom: 6px;">
+          <div id="prog-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent-blue), #1f6feb); transition: width 0.1s;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: var(--text-secondary);">
+          <span id="prog-progress-stats">0.00 / 0.00 MB | Speed: 0.0 KB/s | ETA: 0s</span>
+          <button class="btn btn-sm btn-danger" id="btn-prog-abort" data-i18n="progBtnAbort">🛑 Cancel</button>
+        </div>
+      </div>
+
+      <!-- Main Operational Controls Area -->
+      <div id="prog-controls-area" style="display: none;">
+        <div class="grid-2" style="gap: 16px; margin-bottom: 16px;">
+          <!-- 1. Read / Dump Card -->
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <span data-i18n="progReadTitle">1. Read / Dump NAND Flash</span>
+                <div class="subtitle" data-i18n="progReadSub">Read physical flash contents into memory for inspection, export, or direct partition analysis</div>
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 10px;">
+              <label for="select-read-range" data-i18n="progLabelRange">Read Range Scope</label>
+              <select id="select-read-range">
+                <option value="full" selected data-i18n="progOptFullChip">Full Chip (Complete Flash Capacity)</option>
+                <option value="custom" data-i18n="progOptCustomRange">Custom Physical Offset & Length</option>
+              </select>
+            </div>
+            <div id="prog-read-custom-group" class="grid-2" style="display: none; gap: 8px; margin-bottom: 10px;">
+              <div class="form-group">
+                <label for="prog-read-custom-addr" data-i18n="progLabelAddr">Physical Address (Hex)</label>
+                <input type="text" id="prog-read-custom-addr" value="0x0">
+              </div>
+              <div class="form-group">
+                <label for="prog-read-custom-len" data-i18n="progLabelLen">Length (Hex / Bytes)</label>
+                <input type="text" id="prog-read-custom-len" value="0x10000000">
+              </div>
+            </div>
+            <div style="display: flex; gap: 16px; margin-bottom: 14px; font-size: 0.85rem;">
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="checkbox" id="prog-read-skip-bad" checked> <span data-i18n="progChkSkipBad">Skip Known Bad Blocks</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="checkbox" id="prog-read-inc-spare"> <span data-i18n="progChkIncSpare">Include Spare / OOB Area (Raw Dump)</span>
+              </label>
+            </div>
+            <div class="form-group" style="margin-bottom: 10px;">
+              <label for="select-prog-read-qpic" style="font-size: 0.85rem;">⚡ Qualcomm QPIC Hardware Acceleration:</label>
+              <select id="select-prog-read-qpic" style="padding: 4px 6px; font-size: 0.85rem;">
+                <option value="none" selected>Standard Mode (Off)</option>
+                <option value="bch4">QPIC BCH4 Hardware De-interleaving</option>
+                <option value="bch8">QPIC BCH8 Hardware De-interleaving</option>
+              </select>
+            </div>
+            <div class="btn-group" style="margin-bottom: 10px;">
+              <button class="btn btn-primary" id="btn-prog-start-read" data-i18n="progBtnStartRead">📥 Start Read Flash</button>
+            </div>
+            <!-- Dump Ready Actions -->
+            <div id="prog-dump-ready-card" style="display: none; background: rgba(63, 185, 80, 0.1); border: 1px solid rgba(63, 185, 80, 0.3); border-radius: 6px; padding: 10px; margin-top: 10px;">
+              <div id="prog-dump-ready-text" style="font-size: 0.85rem; font-weight: bold; color: var(--accent-green); margin-bottom: 8px;">Dump Ready: nand_dump.bin (256.00 MB)</div>
+              <div class="btn-group">
+                <button class="btn btn-sm btn-green" id="btn-prog-save-dump" data-i18n="progBtnSaveDump">💾 Save Dump File</button>
+                <button class="btn btn-sm btn-orange" id="btn-prog-send-to-studio" data-i18n="progBtnSendStudio">🛠️ Load into Firmware Studio (QPIC/MIBIB)</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Flash / Write Card -->
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <span data-i18n="progWriteTitle">2. Flash / Write NAND Flash</span>
+                <div class="subtitle" data-i18n="progWriteSub">Write flat binaries or Qualcomm QPIC raw images directly to target NAND block offsets</div>
+              </div>
+            </div>
+            <!-- Write Dropzone -->
+            <div class="dropzone" id="prog-write-dropzone" style="padding: 16px 10px; margin-bottom: 10px;">
+              <div class="dropzone-icon" style="font-size: 1.6rem;">⚡</div>
+              <div class="dropzone-text" data-i18n="progWriteDropzone" style="font-size: 0.85rem;">Click or Drag & Drop <strong>Firmware Binary (.bin / .raw)</strong> to Flash</div>
+              <div id="prog-staged-write-label" style="font-size: 0.8rem; color: var(--accent-blue); margin-top: 4px; font-weight: bold;">No file staged</div>
+              <input type="file" id="prog-write-file-input" style="display: none;" accept=".bin,.raw,.img,.dump,.mbn">
+            </div>
+            <div class="grid-2" style="gap: 8px; margin-bottom: 10px;">
+              <div class="form-group">
+                <label for="prog-write-addr" data-i18n="progLabelAddr">Target Address (Hex)</label>
+                <input type="text" id="prog-write-addr" value="0x0">
+              </div>
+              <div class="form-group" style="display: flex; align-items: flex-end;">
+                <button class="btn btn-sm btn-orange" id="btn-prog-stage-from-studio" style="width: 100%; height: 38px;" data-i18n="progBtnStageStudio">📦 Stage from Studio Workspace</button>
+              </div>
+            </div>
+            <div style="display: flex; gap: 16px; margin-bottom: 14px; font-size: 0.85rem;">
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="checkbox" id="prog-write-auto-erase" checked> <span data-i18n="progChkAutoErase">Auto-Erase Target Blocks Before Writing</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="checkbox" id="prog-write-inc-spare"> <span data-i18n="progChkIncSpare">Include Spare / OOB Area (Raw Write)</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="checkbox" id="prog-write-skip-bad" checked> <span data-i18n="progChkSkipBad">Skip Bad Blocks</span>
+              </label>
+            </div>
+            <div class="form-group" style="margin-bottom: 10px;">
+              <label for="select-prog-write-qpic" style="font-size: 0.85rem;">⚡ Qualcomm QPIC Hardware Acceleration:</label>
+              <select id="select-prog-write-qpic" style="padding: 4px 6px; font-size: 0.85rem;">
+                <option value="none" selected>Standard Mode (Off)</option>
+                <option value="bch4">QPIC BCH4 Hardware Interleaving & Parity</option>
+                <option value="bch8">QPIC BCH8 Hardware Interleaving & Parity</option>
+              </select>
+            </div>
+            <div class="btn-group">
+              <button class="btn btn-primary" id="btn-prog-start-write" disabled data-i18n="progBtnStartWrite">⚡ Start Flash Write</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2" style="gap: 16px; margin-bottom: 16px;">
+          <!-- 3. Physical Erase Card -->
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <span data-i18n="progEraseTitle">3. Physical Erase Blocks</span>
+                <div class="subtitle" data-i18n="progEraseSub">Bulk erase blocks to 0xFF with block alignment validation</div>
+              </div>
+            </div>
+            <div class="grid-2" style="gap: 8px; margin-bottom: 10px;">
+              <div class="form-group">
+                <label for="prog-erase-addr" data-i18n="progLabelAddr">Physical Start Address (Hex)</label>
+                <input type="text" id="prog-erase-addr" value="0x0">
+              </div>
+              <div class="form-group">
+                <label for="prog-erase-len" data-i18n="progLabelLen">Erase Length (Hex / Bytes)</label>
+                <input type="text" id="prog-erase-len" value="0x10000000">
+              </div>
+            </div>
+            <div style="display: flex; gap: 16px; margin-bottom: 14px; font-size: 0.85rem;">
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="checkbox" id="prog-erase-skip-bad" checked> <span data-i18n="progChkSkipBad">Skip Bad Blocks</span>
+              </label>
+            </div>
+            <div class="btn-group">
+              <button class="btn btn-danger" id="btn-prog-start-erase" data-i18n="progBtnStartErase">🗑️ Erase Physical Range</button>
+            </div>
+          </div>
+
+          <!-- 4. Bad Blocks & Advanced Diagnostics -->
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <span data-i18n="progHealthTitle">4. Bad Blocks & Advanced Diagnostics</span>
+                <div class="subtitle" data-i18n="progHealthSub">Inspect factory / marked bad blocks, perform deep physical scrub, and run SSD RDT reliability tests</div>
+              </div>
+            </div>
+            <!-- Bad Block Summary & Map Grid -->
+            <div id="prog-bb-summary" style="font-size: 0.85rem; margin-bottom: 8px; display: flex; gap: 12px; align-items: center;">
+              <span>Total Physical Blocks: <strong>--</strong></span>
+            </div>
+            <div class="bb-grid-container" id="prog-bb-grid-container" style="margin-bottom: 12px;"></div>
+            
+            <div class="btn-group" style="margin-bottom: 14px;">
+              <button class="btn btn-blue" id="btn-prog-scan-bb" data-i18n="progBtnScanBb">🔍 Scan Bad Blocks</button>
+              <button class="btn btn-orange requires-v360" id="btn-prog-start-scrub" data-i18n="progBtnStartScrub">🧹 Physical Scrub <span class="badge-v360-feature">v3.6.0+</span></button>
+            </div>
+
+            <!-- SSD RDT Reliability Test Panel (v3.6.0+) -->
+            <div class="panel requires-v360" style="background: var(--bg-primary); padding: 12px; margin-bottom: 0;">
+              <div style="font-weight: bold; font-size: 0.85rem; margin-bottom: 8px; color: var(--accent-orange);">
+                🔥 Hardware SSD RDT Reliability Testing Engine <span class="badge-v360-feature">v3.6.0+</span>
+              </div>
+              <div class="grid-3" style="gap: 8px; margin-bottom: 8px;">
+                <div class="form-group">
+                  <label for="select-rdt-mode" data-i18n="progLabelRdtMode" style="font-size: 0.75rem;">RDT Test Mode</label>
+                  <select id="select-rdt-mode" style="padding: 4px 6px; font-size: 0.8rem;">
+                    <option value="chip" selected data-i18n="progOptRdtChip">Full-Chip Spanned (Write All ➔ Read All)</option>
+                    <option value="block" data-i18n="progOptRdtBlock">Per-Block Immediate (Write ➔ Read Each Block)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="prog-rdt-passes" data-i18n="progLabelRdtPasses" style="font-size: 0.75rem;">Test Passes</label>
+                  <input type="number" id="prog-rdt-passes" value="1" min="1" max="10" style="padding: 4px 6px; font-size: 0.8rem;">
+                </div>
+                <div class="form-group">
+                  <label for="prog-rdt-seed" data-i18n="progLabelRdtSeed" style="font-size: 0.75rem;">PRBS Seed (Hex)</label>
+                  <input type="text" id="prog-rdt-seed" value="0xA5A55A5A" style="padding: 4px 6px; font-size: 0.8rem;">
+                </div>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem;">
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                  <input type="checkbox" id="prog-rdt-mark-bad" checked> <span data-i18n="progChkRdtMarkBad">Auto-Mark Failed Blocks as Bad</span>
+                </label>
+                <button class="btn btn-sm btn-orange" id="btn-prog-start-rdt" data-i18n="progBtnStartRdt">🔥 Run SSD RDT Test</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Live Console & Serial Telemetry -->
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <span data-i18n="progConsoleTitle">5. Live Serial Console & Telemetry</span>
+            </div>
+            <div class="btn-group">
+              <button class="btn btn-sm" id="btn-prog-clear-log" data-i18n="progBtnClearLog">🧹 Clear Console</button>
+            </div>
+          </div>
+          <div class="console-container" id="prog-console-output"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Custom Export Filename Modal -->
@@ -226,6 +475,9 @@
   <script src="js/parser-xml.js"></script>
   <script src="js/builder.js"></script>
   <script src="js/qpic-codec.js"></script>
+  <script src="js/chip-database.js"></script>
+  <script src="js/nand-programmer-client.js"></script>
+  <script src="js/programmer-studio.js"></script>
   <script src="js/firmware-studio.js"></script>
   <script src="js/app.js"></script>
 </body>

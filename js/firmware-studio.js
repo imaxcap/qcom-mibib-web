@@ -90,6 +90,24 @@ const FirmwareStudio = {
         this.showQpicExportModal();
       });
     }
+
+    // Flash to Hardware Programmer Button
+    const btnFlashHw = document.getElementById('btn-fw-flash-hardware');
+    if (btnFlashHw) {
+      btnFlashHw.addEventListener('click', () => {
+        if (!this.firmwareData) {
+          showToast('No active firmware loaded', 'error');
+          return;
+        }
+        window.currentFwData = this.firmwareData;
+        window.currentFwFileName = this.firmwareFileName;
+        const btnStage = document.getElementById('btn-prog-stage-from-studio');
+        if (btnStage) btnStage.click();
+        const tabBtnProg = document.getElementById('tab-btn-programmer');
+        if (tabBtnProg) tabBtnProg.click();
+        showToast('Transferred active firmware to Hardware Programmer workspace!', 'success');
+      });
+    }
   },
 
   showLoading(text = 'Processing...', progress = null) {

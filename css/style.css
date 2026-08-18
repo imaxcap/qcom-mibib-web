@@ -673,3 +673,109 @@ tr.has-warning td {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* Hardware Programmer WebGUI Studio Styles */
+.feature-disabled {
+  opacity: 0.55;
+  filter: grayscale(40%);
+  position: relative;
+}
+
+.feature-disabled::after {
+  content: " (Requires v3.6.0+)";
+  font-size: 0.75rem;
+  color: var(--accent-orange);
+  font-weight: normal;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.stat-value {
+  font-size: 1.05rem;
+  color: var(--text-primary);
+}
+
+.console-container {
+  background-color: #05080c;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 12px;
+  height: 220px;
+  overflow-y: auto;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.console-line {
+  margin-bottom: 4px;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.console-line.log-info {
+  color: var(--text-secondary);
+}
+
+.console-line.log-success {
+  color: var(--accent-green);
+  font-weight: 500;
+}
+
+.console-line.log-warn {
+  color: var(--accent-orange);
+}
+
+.console-line.log-error {
+  color: var(--accent-red);
+  font-weight: 600;
+}
+
+/* Bad Block Grid Visualization */
+.bb-grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10px, 1fr));
+  gap: 2px;
+  max-height: 160px;
+  overflow-y: auto;
+  background-color: var(--bg-primary);
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.bb-cell {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  transition: transform 0.1s;
+}
+
+.bb-cell:hover {
+  transform: scale(1.4);
+  z-index: 10;
+}
+
+.bb-cell.good {
+  background-color: rgba(63, 185, 80, 0.4);
+}
+
+.bb-cell.bad {
+  background-color: var(--accent-red);
+  box-shadow: 0 0 4px var(--accent-red);
+}
+
+.badge-v360-feature {
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--accent-green);
+  border: 1px solid rgba(63, 185, 80, 0.3);
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}

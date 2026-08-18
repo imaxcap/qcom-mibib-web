@@ -26,6 +26,9 @@ document.addEventListener('DOMContentLoaded', () => {
   initCalculator();
   bindUIEvents();
   loadDefaultPreset();
+  if (typeof ProgrammerStudio !== 'undefined') {
+    ProgrammerStudio.init();
+  }
 });
 
 function initLanguageAndTheme() {
