@@ -57,11 +57,20 @@ html[data-theme="dark"] {
 }
 
 body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   background-color: var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.5;
   padding: 20px;
   transition: background-color 0.3s, color 0.3s;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+}
+
+code, pre, .console-container, .col-hex, .col-block {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 .container {
@@ -683,21 +692,16 @@ tr.has-warning td {
 
 .feature-disabled::after {
   content: " (Requires v3.6.0+)";
-  font-size: 0.75rem;
   color: var(--accent-orange);
-  font-weight: normal;
 }
 
 .stat-label {
-  font-size: 0.75rem;
   text-transform: uppercase;
   color: var(--text-secondary);
-  letter-spacing: 0.5px;
   margin-bottom: 2px;
 }
 
 .stat-value {
-  font-size: 1.05rem;
   color: var(--text-primary);
 }
 
@@ -708,7 +712,6 @@ tr.has-warning td {
   padding: 12px;
   height: 220px;
   overflow-y: auto;
-  font-size: 0.85rem;
   line-height: 1.4;
 }
 
@@ -724,7 +727,6 @@ tr.has-warning td {
 
 .console-line.log-success {
   color: var(--accent-green);
-  font-weight: 500;
 }
 
 .console-line.log-warn {
@@ -733,7 +735,6 @@ tr.has-warning td {
 
 .console-line.log-error {
   color: var(--accent-red);
-  font-weight: 600;
 }
 
 /* Bad Block Grid Visualization */
@@ -773,7 +774,6 @@ tr.has-warning td {
   background: rgba(63, 185, 80, 0.15);
   color: var(--accent-green);
   border: 1px solid rgba(63, 185, 80, 0.3);
-  font-size: 0.7rem;
   padding: 1px 6px;
   border-radius: 4px;
   margin-left: 6px;

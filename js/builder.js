@@ -31,12 +31,12 @@ function buildSystemMbnBytes(partitions, calculatorOptions = {}) {
   // Pure NAND: Flash 0 is NAND, page size 2048 (2K) or 4096 (4K) bytes, block size 128KB (2K) or 256KB (4K), 2 MIBIB copies (-c 2) -> 256KB (2K) or 512KB (4K)
   let pageSize = calculatorOptions.pageSize || 2048;
   let blockSizeBytes = calculatorOptions.primaryBlockSize || (128 * 1024);
-  let numCopies = 2;
+  let numCopies = calculatorOptions.numCopies !== undefined ? calculatorOptions.numCopies : 2;
 
   if (flashType === 'nor' || flashType === 'norplusnand') {
     pageSize = 256; // SPI-NOR page size is fixed to 256 bytes (0x100)
     blockSizeBytes = calculatorOptions.norBlockSize || (64 * 1024);
-    numCopies = 1;
+    numCopies = calculatorOptions.numCopies !== undefined ? calculatorOptions.numCopies : 1;
   }
 
   const pagesPerBlock = Math.floor(blockSizeBytes / pageSize) || 64;
@@ -68,22 +68,48 @@ function buildSystemMbnBytes(partitions, calculatorOptions = {}) {
       usrEntriesUint8[usrOffset + b] = val;
     }
 
+    // Attribute normalization & sanitization
+    let attr1 = part.attr1;
+    let attr2 = part.attr2;
+    let attr3 = part.attr3;
+    let attr4 = part.attr4;
+    const isMibib = part.name === '0:MIBIB';
+
+    if (isMibib) {
+      attr1 = (attr1 !== undefined && attr1 !== 0x00) ? attr1 : 0xFF;
+      attr2 = (attr2 !== undefined && attr2 !== 0x00 && attr2 !== 0xFF) ? attr2 : 64;
+      attr3 = (attr3 !== undefined && attr3 !== 0x00 && attr3 !== 0xFF) ? attr3 : 16;
+      attr4 = 0xFF;
+    } else {
+      if (attr1 === undefined || (attr1 === 0x00 && attr2 === 0x00 && attr3 === 0xFF)) {
+        attr1 = 0xFF;
+        attr2 = 0xFF;
+        attr3 = 0x00;
+        attr4 = 0xFF;
+      } else {
+        attr1 = attr1 !== undefined ? attr1 : 0xFF;
+        attr2 = attr2 !== undefined ? attr2 : 0xFF;
+        attr3 = attr3 !== undefined ? attr3 : 0x00;
+        attr4 = attr4 !== undefined ? attr4 : 0xFF;
+      }
+    }
+
     // System Entry: offset (startBlock), length (sizeBlocks), attr1, attr2, attr3, which_flash
     sysEntriesView.setUint32(sysOffset + 16, part.startBlock || 0, true);
     sysEntriesView.setUint32(sysOffset + 20, part.sizeBlocks || 0, true);
-    sysEntriesUint8[sysOffset + 24] = part.attr1 !== undefined ? part.attr1 : 0xFF;
-    sysEntriesUint8[sysOffset + 25] = part.attr2 !== undefined ? part.attr2 : 0xFF;
-    sysEntriesUint8[sysOffset + 26] = part.attr3 !== undefined ? part.attr3 : 0xFF;
+    sysEntriesUint8[sysOffset + 24] = attr1;
+    sysEntriesUint8[sysOffset + 25] = attr2;
+    sysEntriesUint8[sysOffset + 26] = attr3;
     sysEntriesUint8[sysOffset + 27] = part.whichFlash !== undefined ? part.whichFlash : 0x00;
 
     // User Entry: size_kb, pad_kb, which_flash, attr1, attr2, attr3, attr4
     usrEntriesView.setUint32(usrOffset + 16, part.sizeKb || 0, true);
     usrEntriesView.setUint16(usrOffset + 20, part.padKb || 0, true);
     usrEntriesView.setUint16(usrOffset + 22, part.whichFlash || 0, true);
-    usrEntriesUint8[usrOffset + 24] = part.attr1 !== undefined ? part.attr1 : 0xFF;
-    usrEntriesUint8[usrOffset + 25] = part.attr2 !== undefined ? part.attr2 : 0xFF;
-    usrEntriesUint8[usrOffset + 26] = part.attr3 !== undefined ? part.attr3 : 0xFF;
-    usrEntriesUint8[usrOffset + 27] = part.attr4 !== undefined ? part.attr4 : 0xFF;
+    usrEntriesUint8[usrOffset + 24] = attr1;
+    usrEntriesUint8[usrOffset + 25] = attr2;
+    usrEntriesUint8[usrOffset + 26] = attr3;
+    usrEntriesUint8[usrOffset + 27] = attr4;
   }
 
   // 2. Build System Table & User Table Headers (16 bytes each)
@@ -182,15 +208,40 @@ function buildPartitionXml(partitions, calculatorOptions = {}) {
   xml += `  <partitions>\n`;
 
   partitions.forEach((part) => {
+    let attr1 = part.attr1;
+    let attr2 = part.attr2;
+    let attr3 = part.attr3;
+    let attr4 = part.attr4;
+    const isMibib = part.name === '0:MIBIB';
+
+    if (isMibib) {
+      attr1 = (attr1 !== undefined && attr1 !== 0x00) ? attr1 : 0xFF;
+      attr2 = (attr2 !== undefined && attr2 !== 0x00 && attr2 !== 0xFF) ? attr2 : 64;
+      attr3 = (attr3 !== undefined && attr3 !== 0x00 && attr3 !== 0xFF) ? attr3 : 16;
+      attr4 = 0xFF;
+    } else {
+      if (attr1 === undefined || (attr1 === 0x00 && attr2 === 0x00 && attr3 === 0xFF)) {
+        attr1 = 0xFF;
+        attr2 = 0xFF;
+        attr3 = 0x00;
+        attr4 = 0xFF;
+      } else {
+        attr1 = attr1 !== undefined ? attr1 : 0xFF;
+        attr2 = attr2 !== undefined ? attr2 : 0xFF;
+        attr3 = attr3 !== undefined ? attr3 : 0x00;
+        attr4 = attr4 !== undefined ? attr4 : 0xFF;
+      }
+    }
+
     xml += `    <partition>\n`;
     xml += `      <name length="16" type="string">${escapeXml(part.name)}</name>\n`;
     xml += `      <size_kb length="4">${part.sizeKb || 0}</size_kb>\n`;
     xml += `      <pad_kb length="2">${part.padKb || 0}</pad_kb>\n`;
     xml += `      <which_flash length="2">${part.whichFlash || 0}</which_flash>\n`;
-    xml += `      <attr>0x${(part.attr1 !== undefined ? part.attr1 : 0xFF).toString(16).toUpperCase().padStart(2, '0')}</attr>\n`;
-    xml += `      <attr>0x${(part.attr2 !== undefined ? part.attr2 : 0xFF).toString(16).toUpperCase().padStart(2, '0')}</attr>\n`;
-    xml += `      <attr>0x${(part.attr3 !== undefined ? part.attr3 : 0xFF).toString(16).toUpperCase().padStart(2, '0')}</attr>\n`;
-    xml += `      <attr>0x${(part.attr4 !== undefined ? part.attr4 : 0xFF).toString(16).toUpperCase().padStart(2, '0')}</attr>\n`;
+    xml += `      <attr>0x${attr1.toString(16).toUpperCase().padStart(2, '0')}</attr>\n`;
+    xml += `      <attr>0x${attr2.toString(16).toUpperCase().padStart(2, '0')}</attr>\n`;
+    xml += `      <attr>0x${attr3.toString(16).toUpperCase().padStart(2, '0')}</attr>\n`;
+    xml += `      <attr>0x${attr4.toString(16).toUpperCase().padStart(2, '0')}</attr>\n`;
     xml += `    </partition>\n`;
   });
 

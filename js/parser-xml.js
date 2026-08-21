@@ -38,17 +38,27 @@ function parseMibibXml(xmlText) {
     const whichFlashNode = node.querySelector("which_flash");
     const whichFlash = whichFlashNode ? parseInt(whichFlashNode.textContent, 10) || 0 : 0;
 
-    const attr1Node = node.querySelector("attr1");
-    const attr1 = attr1Node ? parseHexOrDec(attr1Node.textContent) : 0xFF;
+    const attrNodes = node.querySelectorAll("attr");
+    let attr1 = 0xFF, attr2 = 0xFF, attr3 = 0x00, attr4 = 0xFF;
 
-    const attr2Node = node.querySelector("attr2");
-    const attr2 = attr2Node ? parseHexOrDec(attr2Node.textContent) : 0xFF;
+    if (attrNodes.length >= 4) {
+      attr1 = parseHexOrDec(attrNodes[0].textContent);
+      attr2 = parseHexOrDec(attrNodes[1].textContent);
+      attr3 = parseHexOrDec(attrNodes[2].textContent);
+      attr4 = parseHexOrDec(attrNodes[3].textContent);
+    } else {
+      const attr1Node = node.querySelector("attr1");
+      if (attr1Node) attr1 = parseHexOrDec(attr1Node.textContent);
 
-    const attr3Node = node.querySelector("attr3");
-    const attr3 = attr3Node ? parseHexOrDec(attr3Node.textContent) : 0xFF;
+      const attr2Node = node.querySelector("attr2");
+      if (attr2Node) attr2 = parseHexOrDec(attr2Node.textContent);
 
-    const attr4Node = node.querySelector("attr4");
-    const attr4 = attr4Node ? parseHexOrDec(attr4Node.textContent) : 0xFF;
+      const attr3Node = node.querySelector("attr3");
+      if (attr3Node) attr3 = parseHexOrDec(attr3Node.textContent);
+
+      const attr4Node = node.querySelector("attr4");
+      if (attr4Node) attr4 = parseHexOrDec(attr4Node.textContent);
+    }
 
     entries.push({
       id: 'part_' + Math.random().toString(36).substring(2, 9),

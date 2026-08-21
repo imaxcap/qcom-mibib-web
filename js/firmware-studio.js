@@ -309,11 +309,18 @@ const FirmwareStudio = {
       this.state.parsedMibib = parsed;
       this.state.mibibOffset = parsed.mibibOffset;
 
-      // Determine block size & page size: Prioritize MIBIB header spacing, then current state
-      let blockSize = parsed.detectedBlockSize || this.state.blockSize || (128 * 1024);
-      let pageSize = parsed.detectedPageSize || this.state.pageSize || 2048;
+      const isNor = parsed.detectedFlashType === 'nor' ||
+                    parsed.detectedBlockSize === 64 * 1024 ||
+                    parsed.detectedPageSize === 256 ||
+                    (this.state.fileName && /\bnor\b|_nor_|nor-|-nor|_nor\./i.test(this.state.fileName));
 
-      if (!parsed.detectedBlockSize && this.state.detectedLayout && this.state.detectedLayout.isQpic) {
+      this.state.flashType = isNor ? 'nor' : (parsed.detectedFlashType || 'nand');
+
+      // Determine block size & page size: Prioritize MIBIB header spacing, then current state
+      let blockSize = isNor ? (64 * 1024) : (parsed.detectedBlockSize || this.state.blockSize || (128 * 1024));
+      let pageSize = isNor ? 256 : (parsed.detectedPageSize || this.state.pageSize || 2048);
+
+      if (!isNor && !parsed.detectedBlockSize && this.state.detectedLayout && this.state.detectedLayout.isQpic) {
         pageSize = this.state.detectedLayout.pageSize;
         blockSize = pageSize === 4096 ? 256 * 1024 : 128 * 1024;
       }
@@ -425,8 +432,8 @@ const FirmwareStudio = {
             </div>
           </div>
           <div>
-            <span class="badge ${isQpic ? 'badge-blue' : 'badge-green'}" style="font-size: 0.9rem; padding: 6px 12px;">
-              ${layout ? layout.formatName : 'Flat Binary'}
+            <span class="badge ${isQpic ? 'badge-blue' : (this.state.flashType === 'nor' ? 'badge-orange' : 'badge-green')}" style="padding: 6px 12px;">
+              ${this.state.flashType === 'nor' ? 'SPI-NOR (64KB Block)' : (layout ? layout.formatName : 'Flat Binary')}
             </span>
           </div>
         </div>
@@ -451,7 +458,6 @@ const FirmwareStudio = {
       banner.style.flexWrap = 'wrap';
       banner.style.justifyContent = 'space-between';
       banner.style.alignItems = 'center';
-      banner.style.fontSize = '0.9rem';
 
       const actionsBar = document.querySelector('#tab-firmware .actions-bar');
       if (actionsBar && actionsBar.parentNode) {
@@ -478,9 +484,14 @@ const FirmwareStudio = {
     const sizeBlocks = Math.ceil(maxEndOffset / this.state.blockSize);
     const endHex = maxEndOffset.toString(16).toUpperCase().padStart(8, '0');
 
-    const geomTag = (this.state.pageSize === 4096 || this.state.blockSize >= 256 * 1024)
-      ? (i18n.t('tag4kLayout') || '4K Structure (256KB Block)')
-      : (i18n.t('tag2kLayout') || '2K Structure (128KB Block)');
+    let geomTag = '';
+    if (this.state.flashType === 'nor' || this.state.blockSize === 64 * 1024) {
+      geomTag = (typeof i18n !== 'undefined' ? i18n.t('tagNorLayout') : null) || 'SPI-NOR (64KB Block)';
+    } else if (this.state.pageSize === 4096 || this.state.blockSize >= 256 * 1024) {
+      geomTag = (typeof i18n !== 'undefined' ? i18n.t('tag4kLayout') : null) || '4K Structure (256KB Block)';
+    } else {
+      geomTag = (typeof i18n !== 'undefined' ? i18n.t('tag2kLayout') : null) || '2K Structure (128KB Block)';
+    }
 
     banner.innerHTML = `
       <div style="display: flex; align-items: center; gap: 8px;">
@@ -496,7 +507,7 @@ const FirmwareStudio = {
           })}
         </span>
       </div>
-      <div style="font-size: 0.8rem; color: var(--text-secondary);">
+      <div style="color: var(--text-secondary);">
         ⚡ Range: <strong>0x00000000</strong> ➔ <strong>0x${endHex}</strong>
       </div>
     `;

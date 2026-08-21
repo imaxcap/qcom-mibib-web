@@ -292,7 +292,13 @@ function handleFileImport(file) {
         const result = parseMibibXml(e.target.result);
         currentPartitions = result.entries;
         markPresetAsCustom();
-        autoSelectFlashType(result.detectedFlashType);
+        let xmlFlashType = result.detectedFlashType;
+        if (!xmlFlashType && fileName.includes('nor')) {
+          xmlFlashType = currentPartitions.some(e => e.whichFlash === 1) ? 'norplusnand' : 'nor';
+        }
+        if (xmlFlashType) {
+          autoSelectFlashType(xmlFlashType);
+        }
         recalculateAndRender(false);
         showToast(t('toastImportSuccess', { count: result.entries.length, file: file.name }), 'success');
       } catch (err) {
@@ -305,39 +311,53 @@ function handleFileImport(file) {
       try {
         const result = parseMibibBin(e.target.result);
         currentPartitions = result.entries;
+        currentPartitions.forEach(p => {
+          if (p.name !== '0:MIBIB' && p.attr1 === 0x00 && p.attr2 === 0x00 && p.attr3 === 0xFF) {
+            p.attr1 = 0xFF;
+            p.attr2 = 0xFF;
+            p.attr3 = 0x00;
+            p.attr4 = 0xFF;
+          }
+        });
         markPresetAsCustom();
 
-        let pageSource = "header";
-        if (!result.detectedPageSize) {
-          if (fileName.includes("256k") || fileName.includes("4k") || fileName.includes("-p256")) {
-            result.detectedPageSize = 4096;
-            pageSource = "filename";
-          } else if (fileName.includes("128k") || fileName.includes("2k") || fileName.includes("-p128")) {
-            result.detectedPageSize = 2048;
-            pageSource = "filename";
+        // 1. Binary Flash Type Detection
+        let flashTypeToSelect = result.detectedFlashType;
+        if (!flashTypeToSelect) {
+          const hasSecondary = currentPartitions.some(e => e.whichFlash === 1);
+          if (hasSecondary) {
+            flashTypeToSelect = 'norplusnand';
+          } else if (result.detectedBlockSize === 64 * 1024 || result.detectedPageSize === 256 || fileName.includes('nor')) {
+            flashTypeToSelect = 'nor';
           } else {
-            result.detectedPageSize = 2048;
-            pageSource = "default";
+            flashTypeToSelect = 'nand';
           }
         }
+        autoSelectFlashType(flashTypeToSelect);
 
-        autoSelectPageSize(result.detectedPageSize);
-
-        // Binary Flash Type Detection: check whichFlash & detectedBlockSize
-        const hasSecondary = currentPartitions.some(e => e.whichFlash === 1);
-        if (hasSecondary) {
-          autoSelectFlashType('norplusnand');
+        // 2. Page Size Detection
+        let pageSource = "header";
+        if (flashTypeToSelect === 'nor') {
+          autoSelectPageSize(2048); // Fixed geometry in calculator for NOR
         } else {
-          if (result.detectedBlockSize === 64 * 1024) {
-            autoSelectFlashType('nor');
-          } else {
-            autoSelectFlashType('nand');
+          if (!result.detectedPageSize) {
+            if (fileName.includes("256k") || fileName.includes("4k") || fileName.includes("-p256")) {
+              result.detectedPageSize = 4096;
+              pageSource = "filename";
+            } else if (fileName.includes("128k") || fileName.includes("2k") || fileName.includes("-p128")) {
+              result.detectedPageSize = 2048;
+              pageSource = "filename";
+            } else {
+              result.detectedPageSize = 2048;
+              pageSource = "default";
+            }
           }
+          autoSelectPageSize(result.detectedPageSize);
         }
 
         recalculateAndRender(false);
 
-        if (pageSource === "default") {
+        if (pageSource === "default" && flashTypeToSelect === 'nand') {
           showToast(`Loaded with default 2K Page (128KB Block). You can switch to 4K anytime in top panel.`, 'info');
         } else if (result.mibibOffset && result.mibibOffset > 0) {
           const hexOffset = result.mibibOffset.toString(16).toUpperCase();
@@ -456,6 +476,12 @@ function handleTableInputChange(e) {
       calculator.updateSize(part, val, 'KB');
     } else if (field === 'whichFlash') {
       part.whichFlash = parseInt(val, 10);
+      if (part.name !== '0:MIBIB') {
+        part.attr1 = 0xFF;
+        part.attr2 = 0xFF;
+        part.attr3 = 0x00;
+        part.attr4 = 0xFF;
+      }
     }
     recalculateAndRender(false);
   } catch (err) {
@@ -565,9 +591,9 @@ function insertPartitionBefore(index) {
     sizeKb: 0, // Default size is 0 KB
     sizeBlocks: 0,
     whichFlash: targetPart ? targetPart.whichFlash : 0,
-    attr1: 0x00,
-    attr2: 0x00,
-    attr3: 0xFF,
+    attr1: 0xFF,
+    attr2: 0xFF,
+    attr3: 0x00,
     attr4: 0xFF,
     errors: [],
     warnings: []
@@ -589,9 +615,9 @@ function addNewPartitionEnd() {
     sizeKb: 0, // Default size is 0 KB
     sizeBlocks: 0,
     whichFlash: 0,
-    attr1: 0x00,
-    attr2: 0x00,
-    attr3: 0xFF,
+    attr1: 0xFF,
+    attr2: 0xFF,
+    attr3: 0x00,
     attr4: 0xFF,
     errors: [],
     warnings: []

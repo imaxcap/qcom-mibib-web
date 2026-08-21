@@ -171,3 +171,7 @@ class PartitionCalculator {
     part.sizeBlocks = sizeKb > 0 ? Math.ceil(sizeKb / bsKb) : 0;
   }
 }
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { PartitionCalculator };
+}

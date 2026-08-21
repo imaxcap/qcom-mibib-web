@@ -5,6 +5,11 @@
       "id": "ipq807x_nand",
       "name": "IPQ807x NAND (nand-partition.xml)",
       "file": "ipq807x-nand-partition.xml"
+    },
+    {
+      "id": "ipq40xx_norplusnand",
+      "name": "IPQ40xx NOR + NAND (norplusnand-partition.xml)",
+      "file": "ipq40xx-norplusnand-partition.xml"
     }
   ]
 }

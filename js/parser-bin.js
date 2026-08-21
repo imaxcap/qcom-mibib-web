@@ -76,20 +76,21 @@ function parseMibibBin(inputBuffer) {
       detectedPageSize = 2048; // 2K Page
     } else if (spacing === 64 * 1024) {
       detectedBlockSize = 64 * 1024;
-      detectedPageSize = 2048;
+      detectedPageSize = 256;  // SPI-NOR Page (256 bytes)
     }
   }
 
   // 2. If MIBIB header was found, check standard relative positions for Table Header
   if (mibibOffset >= 0) {
     const candidateOffsets = [
-      mibibOffset + 16,     // Contiguous table (compact standalone)
-      mibibOffset + 256,    // SPI NOR page 1
-      mibibOffset + 2048,   // 2K NAND page 1
-      mibibOffset + 4096,   // 4K NAND page 1
+      { offset: mibibOffset + 16,   pageSize: null, blockSize: null },           // Contiguous table (compact standalone)
+      { offset: mibibOffset + 256,  pageSize: 256,  blockSize: 64 * 1024 },      // SPI NOR page 1 (0x100)
+      { offset: mibibOffset + 2048, pageSize: 2048, blockSize: 128 * 1024 },     // 2K NAND page 1 (0x800)
+      { offset: mibibOffset + 4096, pageSize: 4096, blockSize: 256 * 1024 },     // 4K NAND page 1 (0x1000)
     ];
 
-    for (const testOffset of candidateOffsets) {
+    for (const candidate of candidateOffsets) {
+      const testOffset = candidate.offset;
       if (testOffset + 16 <= dataLen) {
         const m1 = dataView.getUint32(testOffset, true);
         const m2 = dataView.getUint32(testOffset + 4, true);
@@ -99,11 +100,15 @@ function parseMibibBin(inputBuffer) {
           tableOffset = testOffset;
           isSysTable = true;
           numParts = parts;
+          if (candidate.blockSize) detectedBlockSize = candidate.blockSize;
+          if (candidate.pageSize) detectedPageSize = candidate.pageSize;
           break;
         } else if (m1 === USR_TABLE_MAGIC1 && m2 === USR_TABLE_MAGIC2 && parts > 0 && parts <= 128) {
           tableOffset = testOffset;
           isSysTable = false;
           numParts = parts;
+          if (candidate.blockSize) detectedBlockSize = candidate.blockSize;
+          if (candidate.pageSize) detectedPageSize = candidate.pageSize;
           break;
         }
       }
@@ -133,6 +138,40 @@ function parseMibibBin(inputBuffer) {
 
   if (tableOffset < 0) {
     throw new Error("Could not detect a valid Qualcomm MIBIB Partition Table in the provided binary.");
+  }
+
+  // Priority geometry inference: Page 1 Table distance from MIBIB Header (0x100 / 0x800 / 0x1000)
+  // This is the absolute physical geometry indicator on all Qualcomm IPQ architectures.
+  if (mibibOffset >= 0) {
+    const diff = tableOffset - mibibOffset;
+    if (diff === 256) {
+      detectedPageSize = 256;
+      detectedBlockSize = 64 * 1024;
+    } else if (diff === 2048) {
+      detectedPageSize = 2048;
+      detectedBlockSize = 128 * 1024;
+    } else if (diff === 4096) {
+      detectedPageSize = 4096;
+      detectedBlockSize = 256 * 1024;
+    }
+  } else {
+    // If no standalone MIBIB header, check alignment of tableOffset itself
+    if (tableOffset === 256 || tableOffset % (64 * 1024) === 256) {
+      detectedPageSize = 256;
+      detectedBlockSize = 64 * 1024;
+    } else if (tableOffset === 2048 || tableOffset % (128 * 1024) === 2048) {
+      detectedPageSize = 2048;
+      detectedBlockSize = 128 * 1024;
+    } else if (tableOffset === 4096 || tableOffset % (256 * 1024) === 4096) {
+      detectedPageSize = 4096;
+      detectedBlockSize = 256 * 1024;
+    }
+  }
+
+  // Standalone 64KB file size hint
+  if (!detectedBlockSize && dataLen === 64 * 1024) {
+    detectedBlockSize = 64 * 1024;
+    detectedPageSize = 256;
   }
 
   const tableVersion = dataView.getUint32(tableOffset + 8, true);
@@ -203,6 +242,19 @@ function parseMibibBin(inputBuffer) {
     }
   }
 
+  // Infer Flash Architecture Type
+  let detectedFlashType = null;
+  const hasSecondary = entries.some(e => e.whichFlash === 1);
+  if (hasSecondary) {
+    detectedFlashType = 'norplusnand';
+  } else if (detectedBlockSize === 64 * 1024 || detectedPageSize === 256 || (mibibOffset >= 0 && (tableOffset - mibibOffset) === 256) || (tableOffset === 256) || (tableOffset % (64 * 1024) === 256)) {
+    detectedFlashType = 'nor';
+  } else if (detectedBlockSize === 128 * 1024 || detectedBlockSize === 256 * 1024 || detectedPageSize === 2048 || detectedPageSize === 4096) {
+    detectedFlashType = 'nand';
+  } else {
+    detectedFlashType = 'nand';
+  }
+
   return {
     tableType: isSysTable ? 'system' : 'user',
     mibibOffset: mibibOffset >= 0 ? mibibOffset : tableOffset,
@@ -211,6 +263,7 @@ function parseMibibBin(inputBuffer) {
     numParts: numParts,
     detectedBlockSize: detectedBlockSize,
     detectedPageSize: detectedPageSize,
+    detectedFlashType: detectedFlashType,
     entries: entries
   };
 }
